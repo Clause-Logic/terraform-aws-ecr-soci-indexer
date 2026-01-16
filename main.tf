@@ -125,43 +125,6 @@ resource "aws_iam_role" "repository_name_parsing_lambda" {
   name               = "${local.resource_prefix}RepositoryNameParsingLambdaRole"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
 }
-data "archive_file" "repository_name_parsing_lambda_zip_inline" {
-  type        = "zip"
-  output_path = "/tmp/repository_name_parsing_lambda_zip_inline.zip"
-  source {
-    content  = <<EOF
-import json
-
-def handler(event, context):
-  filters = event['filters']
-  REPO_PREFIX = 'arn:aws:ecr:${var.region}:${var.account_id}:repository/'
-  repository_arns = []
-  response = {}
-
-  try:
-    repositories = [filter.split(':')[0] for filter in filters]
-    for repository in repositories:
-      if repository == '*':
-        repository_arns = [REPO_PREFIX + '*']
-        break
-
-      repository_arns.append(REPO_PREFIX + repository)
-
-    response['repository_arns'] = repository_arns
-    return {
-      "statusCode": 200,
-      "body": json.dumps(response)
-    }
-  except Exception:
-    return {
-      "statusCode": 500,
-      "body": json.dumps(response)
-    }
-EOF
-    filename = "index.py"
-  }
-}
-
 # Lambda Function for Parsing Repository Names
 resource "aws_lambda_function" "repository_name_parsing_lambda" {
   function_name = "${local.resource_prefix}RepositoryNameParsingLambda"
@@ -169,9 +132,15 @@ resource "aws_lambda_function" "repository_name_parsing_lambda" {
   runtime       = "python3.9"
   role          = aws_iam_role.repository_name_parsing_lambda.arn
 
-  filename         = data.archive_file.repository_name_parsing_lambda_zip_inline.output_path
-  source_code_hash = data.archive_file.repository_name_parsing_lambda_zip_inline.output_base64sha256
+  filename         = "${path.module}/lambda/repository-name-parsing-lambda.zip"
+  source_code_hash = filebase64sha256("${path.module}/lambda/repository-name-parsing-lambda.zip")
 
+  environment {
+    variables = {
+      AWS_REGION = var.region
+      ACCOUNT_ID = var.account_id
+    }
+  }
 }
 
 data "aws_lambda_invocation" "name_parsing_lambda" {
