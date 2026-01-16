@@ -137,7 +137,6 @@ resource "aws_lambda_function" "repository_name_parsing_lambda" {
 
   environment {
     variables = {
-      AWS_REGION = var.region
       ACCOUNT_ID = var.account_id
     }
   }
